@@ -8,8 +8,9 @@ function Terrain(scene, gridSize, chunkSize){
 
         if(k == 0){
           this._generateWater(chunk);
-          chunk.generateMesh();
         }
+
+        chunk.generateMesh();
       }
     }
   }
@@ -19,7 +20,7 @@ Terrain.prototype._generateWater = function(chunk){
   var size = chunk.getSize();
 
   for(var i = 0; i < size.x; i++)
-    for(var j = 0; j < size.y && j < 6; j++)
+    for(var j = 0; j < size.y && j < 8; j++)
       for(var k = 0; k < size.z; k++){
         var block = chunk.getBlock(i, j, k);
 
@@ -32,19 +33,17 @@ Terrain.prototype._generateWater = function(chunk){
 
 Terrain.prototype._createChunk = function(i, j, k, scene, chunkSize){
   var noise = this.noise;
-  var d = 1/48;
+  var d = 1/56;
 
   var chunk = new Chunk(scene, function(x, y, z){
     var p = this.getPosition();
-    var n = noise.noise((p.x + x)*d, (p.z + z)*d);
+    var n = noise.noise((p.x + x)*d, (p.z - z)*d);
     n = (n + 1)*0.5; // normalize
-    var threshold = n * this.size.z * 2;
+    var threshold = n * this.size.z * 3;
 
     var type = null;
-    if(p.y + y > 15)
-      type = "stone"
-    else if(p.y + y > 12)
-      type = "dirt";
+    if(p.y + y <=8)
+      type = "sand";
     else
       type = "grass";
 

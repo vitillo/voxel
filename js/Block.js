@@ -2,10 +2,6 @@ function Block(visible, type){
   this.visible = visible || false;
   this.type = type;
   this.uvCache = [];
-
-  //for(var i = 0; i < 16; i++)
-    //this.uvCache[i] = [];
-
   this.setType(type);
 }
 
@@ -18,8 +14,8 @@ Block.prototype = Object.create(Object.prototype);
 
 Block.prototype._generateUVs = function(x, y){
   var uvs = Block.uvCache[x][y];
-  var s = 1/16;
-  var c = 0.006; //margin
+  var s = 0.0625; //1/16
+  var c = 3/256; //margin
 
   if(!uvs){
     uvs = [];
@@ -62,7 +58,10 @@ Block.prototype.setType = function(type){
       this._generateUVs(2, 15);
       break;
     case "water":
-      this._generateUVs(15, 2);
+      this._generateUVs(0, 6);
+      break;
+    case "sand":
+      this._generateUVs(2, 14);
       break;
     default:
       this._generateUVs(2, 15);
