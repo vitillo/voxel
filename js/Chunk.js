@@ -1,16 +1,17 @@
-function Chunk(scene, generator, sizeX, sizeY, sizeZ){
+function Chunk(scene, generator, size, position){
   this._scene = scene;
   this._createBlock = generator ? generator : function(){return new Block(true);};
 
-  this.sizeX = sizeX || 10;
-  this.sizeY = sizeY || 10;
-  this.sizeZ = sizeZ || 10;
+  this.size = size || new THREE.Vector3(10, 10, 10);
+  this.visibleChunks = 0;
 
   this.wrapper = new THREE.Object3D();
+  this.wrapper.position = position || new THREE.Vector3(0, 0, 0);
+  Chunk.grid.set(this.wrapper.position, this);
   scene.add(this.wrapper);
 
   this._initialize();
-  this._generateMesh();
+  this.generateMesh();
 
   this.__defineGetter__("position", function(){
     return this.wrapper.position;
@@ -25,87 +26,141 @@ function Chunk(scene, generator, sizeX, sizeY, sizeZ){
   });
 }
 
-Chunk.prototype = Object.create(Object.prototype);
-
-Chunk.prototype.constructor = Object;
+Chunk.grid = new Grid();
 
 Chunk.prototype._initialize = function(){
   this.buffer = [];
-  for(var x = 0; x < this.sizeX; x++){
+  for(var x = 0; x < this.size.x; x++){
     this.buffer[x] = [];
 
-    for(var y = 0; y < this.sizeY; y++){
+    for(var y = 0; y < this.size.y; y++){
       this.buffer[x][y] = [];
 
-      for(var z = 0; z < this.sizeZ; z++){
+      for(var z = 0; z < this.size.z; z++){
         this.buffer[x][y][z] = this._createBlock(x, y, z);
       }
     }
   }
 }
 
-Chunk.prototype._generateMesh = function(){
+Chunk.prototype._createLeftFace = function(x, y, z, vertices, geometry, uvs){
+  if(x != 0 && this.buffer[x-1][y][z].isVisible())
+    return;
+
+  var vo = geometry.vertices.length;
+
+  geometry.vertices.push(vertices[0]);
+  geometry.vertices.push(vertices[1]);
+  geometry.vertices.push(vertices[2]);
+  geometry.vertices.push(vertices[3]);
+  geometry.faces.push(new THREE.Face4(vo, vo + 1, vo + 2, vo + 3, new THREE.Vector3(-1, 0, 0)));
+  geometry.faceVertexUvs[ 0 ].push( [ uvs[0], uvs[1], uvs[2], uvs[3] ] );
+}
+
+Chunk.prototype._createFrontFace = function(x, y, z, vertices, geometry, uvs){
+  if(z != 0 && this.buffer[x][y][z-1].isVisible())
+    return;
+
+  var vo = geometry.vertices.length;
+
+  geometry.vertices.push(vertices[0]);
+  geometry.vertices.push(vertices[1]);
+  geometry.vertices.push(vertices[4]);
+  geometry.vertices.push(vertices[5]);
+  geometry.faces.push(new THREE.Face4(vo, vo + 3, vo + 2, vo + 1, new THREE.Vector3(0, 0, 1)));
+  geometry.faceVertexUvs[ 0 ].push( [ uvs[0], uvs[1], uvs[2], uvs[3] ] );
+}
+
+Chunk.prototype._createRightFace = function(x, y, z, vertices, geometry, uvs){
+  if(x != this.size.x - 1 && this.buffer[x+1][y][z].isVisible())
+    return;
+
+  var vo = geometry.vertices.length;
+
+  geometry.vertices.push(vertices[4]);
+  geometry.vertices.push(vertices[5]);
+  geometry.vertices.push(vertices[6]);
+  geometry.vertices.push(vertices[7]);
+  geometry.faces.push(new THREE.Face4(vo, vo + 1, vo + 2, vo + 3, new THREE.Vector3(1, 0, 0)));
+  geometry.faceVertexUvs[ 0 ].push( [ uvs[0], uvs[1], uvs[2], uvs[3] ] );
+}
+
+Chunk.prototype._createBackFace = function(x, y, z, vertices, geometry, uvs){
+  if(z != this.size.z - 1 && this.buffer[x][y][z+1].isVisible())
+    return;
+
+  var vo = geometry.vertices.length;
+
+  geometry.vertices.push(vertices[6]);
+  geometry.vertices.push(vertices[3]);
+  geometry.vertices.push(vertices[2]);
+  geometry.vertices.push(vertices[7]);
+  geometry.faces.push(new THREE.Face4(vo, vo + 1, vo + 2, vo + 3, new THREE.Vector3(0, 0, -1)));
+  geometry.faceVertexUvs[ 0 ].push( [ uvs[0], uvs[1], uvs[2], uvs[3] ] );
+}
+
+Chunk.prototype._createTopFace = function(x, y, z, vertices, geometry, uvs){
+  if(y != (this.size.y - 1) && this.buffer[x][y+1][z].isVisible())
+    return;
+
+  var vo = geometry.vertices.length;
+
+  geometry.vertices.push(vertices[1]);
+  geometry.vertices.push(vertices[4]);
+  geometry.vertices.push(vertices[7]);
+  geometry.vertices.push(vertices[2]);
+  geometry.faces.push(new THREE.Face4(vo, vo + 1, vo + 2, vo + 3, new THREE.Vector3(0, 1, 0)));
+  geometry.faceVertexUvs[ 0 ].push( [ uvs[0], uvs[1], uvs[2], uvs[3] ] );
+}
+
+Chunk.prototype._createBottomFace = function(x, y, z, vertices, geometry, uvs){
+  if(y != 0 && this.buffer[x][y-1][z].isVisible())
+    return;
+
+  var vo = geometry.vertices.length;
+
+  geometry.vertices.push(vertices[0]);
+  geometry.vertices.push(vertices[3]);
+  geometry.vertices.push(vertices[6]);
+  geometry.vertices.push(vertices[5]);
+  geometry.faces.push(new THREE.Face4(vo, vo + 1, vo + 2, vo + 3, new THREE.Vector3(0, 1, 0)));
+  geometry.faceVertexUvs[ 0 ].push( [ uvs[0], uvs[1], uvs[2], uvs[3] ] );
+}
+
+Chunk.prototype.generateMesh = function(){
   var geometry = this.geometry = new THREE.Geometry();
-  var material = new THREE.MeshPhongMaterial({color: 0x008801, ambient: 0x008800, specular: 0xFFFFFF});
+  var texture = THREE.ImageUtils.loadTexture('images/minecraft.png');
+  //var material = new THREE.MeshPhongMaterial({color: 0x008801, ambient: 0x008800, specular: 0xFFFFFF});
+  var material = new THREE.MeshPhongMaterial({specular: 0xFFFFFF, map: texture});
+  this.visibleChunks = 0;
 
-  for(var x = 0; x < this.sizeX; x++){
-    for(var y = 0; y < this.sizeY; y++){
-      for(var z = 0; z < this.sizeZ; z++){
-        if(!this.buffer[x][y][z].isVisible())
+  for(var x = 0; x < this.size.x; x++){
+    for(var y = 0; y < this.size.y; y++){
+      for(var z = 0; z < this.size.z; z++){
+        var block = this.buffer[x][y][z];
+
+        if(!block.isVisible())
           continue;
+
+        this.visibleChunks++;
         var vo = geometry.vertices.length;
+        var vertices = [];
 
-        //Left Face
-        var vertex0 = new THREE.Vector3(x, y, -z);
-        var vertex1 = new THREE.Vector3(x, y + 1, -z);
-        var vertex2 = new THREE.Vector3(x, y + 1, -z - 1);
-        var vertex3 = new THREE.Vector3(x, y, -z - 1);
+        vertices[0] = new THREE.Vector3(x, y, -z);
+        vertices[1] = new THREE.Vector3(x, y + 1, -z);
+        vertices[2] = new THREE.Vector3(x, y + 1, -z - 1);
+        vertices[3] = new THREE.Vector3(x, y, -z - 1);
+        vertices[4] = new THREE.Vector3(x + 1, y + 1, -z);
+        vertices[5] = new THREE.Vector3(x + 1, y, -z);
+        vertices[6] = new THREE.Vector3(x + 1, y, -z - 1);
+        vertices[7] = new THREE.Vector3(x + 1, y + 1, -z - 1);
 
-        geometry.vertices.push(vertex0);
-        geometry.vertices.push(vertex1);
-        geometry.vertices.push(vertex2);
-        geometry.vertices.push(vertex3);
-
-        if(x == 0 || !this.buffer[x-1][y][z].isVisible()){
-          geometry.faces.push(new THREE.Face4(vo + 0, vo + 1, vo + 2, vo + 3, new THREE.Vector3(-1, 0, 0)));
-        }
-
-        //Front Face
-        var vertex4 = new THREE.Vector3(x + 1, y + 1, -z);
-        var vertex5 = new THREE.Vector3(x + 1, y, -z);
-
-        geometry.vertices.push(vertex4);
-        geometry.vertices.push(vertex5);
-
-        if(z == 0 || !this.buffer[x][y][z-1].isVisible()){
-          geometry.faces.push(new THREE.Face4(vo + 0, vo + 5, vo + 4, vo + 1, new THREE.Vector3(0, 0, 1)));
-        }
-
-        //Right Face
-        var vertex6 = new THREE.Vector3(x + 1, y, -z - 1);
-        var vertex7 = new THREE.Vector3(x + 1, y + 1, -z - 1);
-
-        geometry.vertices.push(vertex6);
-        geometry.vertices.push(vertex7);
-
-        if(x == this.sizeX - 1 || !this.buffer[x+1][y][z].isVisible()){
-          geometry.faces.push(new THREE.Face4(vo + 4, vo + 5, vo + 6, vo + 7, new THREE.Vector3(1, 0, 0)));
-        }
-
-        //Back Face
-        if(z == this.sizeZ - 1 || !this.buffer[x][y][z+1].isVisible()){
-          geometry.faces.push(new THREE.Face4(vo + 6, vo + 3, vo + 2, vo + 7, new THREE.Vector3(0, 0, -1)));
-        }
-
-        //Top Face
-        if(y == this.sizeY - 1 || !this.buffer[x][y+1][z].isVisible()){
-          geometry.faces.push(new THREE.Face4(vo + 1, vo + 4, vo + 7, vo + 2, new THREE.Vector3(0, 1, 0)));
-        }
-        
-        //Bottom Face
-        if(y == 0 || !this.buffer[x][y-1][z].isVisible()){
-          geometry.faces.push(new THREE.Face4(vo + 0, vo + 3, vo + 6, vo + 5, new THREE.Vector3(0, -1, 0)));
-        }
+        this._createLeftFace(x, y, z, vertices, geometry, block.uvs);
+        this._createFrontFace(x, y, z, vertices, geometry, block.uvs);
+        this._createRightFace(x, y, z, vertices, geometry, block.uvs);
+        this._createBackFace(x, y, z, vertices, geometry, block.uvs);
+        this._createTopFace(x, y, z, vertices, geometry, block.uvs);
+        this._createBottomFace(x, y, z, vertices, geometry, block.uvs);
       }
     }
   }
@@ -116,9 +171,9 @@ Chunk.prototype._generateMesh = function(){
 
   this.mesh = new THREE.Mesh(this.geometry, material);
   this.mesh.userData['chunk'] = this;
-  this.mesh.position.x = -this.sizeX/2;
-  this.mesh.position.y = -this.sizeY/2;
-  this.mesh.position.z = this.sizeZ/2;
+  this.mesh.position.x = -this.size.x/2;
+  this.mesh.position.y = -this.size.y/2;
+  this.mesh.position.z = this.size.z/2;
   this.wrapper.add(this.mesh);
 }
 
@@ -161,39 +216,55 @@ Chunk.prototype.addBlock = function(point, direction){
   }
 
   // Create new chunk if needed
-  var chunkPosition = null;
-  var generator = null;
-  var self = this;
-
   if(block.x < 0){
-    chunkPosition = new THREE.Vector3(this.wrapper.position.x - this.sizeX, this.wrapper.position.y, this.wrapper.position.z);
-    generator = function(x, y, z){ return new Block(x == self.sizeX - 1 && y == block.y && z == block.z); }
-  }else if(block.x >= this.sizeX){
-    chunkPosition = new THREE.Vector3(this.wrapper.position.x + this.sizeX, this.wrapper.position.y, this.wrapper.position.z);
-    generator = function(x, y, z){ return new Block(x == 0 && y == block.y && z == block.z); }
-  }else if(block.y < 0){
-    chunkPosition = new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y - this.sizeY, this.wrapper.position.z);
-    generator = function(x, y, z){ return new Block(x == block.x && y == self.sizeY - 1 && z == block.z); }
-  }else if(block.y >= this.sizeY){
-    chunkPosition = new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y + this.sizeY, this.wrapper.position.z);
-    generator = function(x, y, z){ return new Block(x == block.x && y == 0 && z == block.z); }
-  }else if(block.z < 0){
-    chunkPosition = new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y, this.wrapper.position.z + this.sizeZ);
-    generator = function(x, y, z){ return new Block(x == block.x && y == block.y && z == self.sizeZ - 1); }
-  }else if(block.z >= this.sizeZ){
-    chunkPosition = new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y, this.wrapper.position.z - this.sizeZ);
-    generator = function(x, y, z){ return new Block(x == block.x && y == block.y && z == 0); }
-  }
+    this._updateNeighbor(new THREE.Vector3(this.wrapper.position.x - this.size.x, this.wrapper.position.y, this.wrapper.position.z), 
+                         new THREE.Vector3(this.size.x - 1, block.y, block.z));
+    return;
 
-  if(chunkPosition){
-    var chunk = new Chunk(this._scene, generator, this.sizeX, this.sizeY, this.sizeZ);
-    chunk.position.copy(chunkPosition);
+  }else if(block.x >= this.size.x){
+    this._updateNeighbor(new THREE.Vector3(this.wrapper.position.x + this.size.x, this.wrapper.position.y, this.wrapper.position.z), 
+                         new THREE.Vector3(0, block.y, block.z));
+    return;
+  }else if(block.y < 0){
+    this._updateNeighbor(new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y - this.size.y, this.wrapper.position.z), 
+                         new THREE.Vector3(block.x, this.size.y - 1, block.z));
+    return;
+  }else if(block.y >= this.size.y){
+    this._updateNeighbor(new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y + this.size.y, this.wrapper.position.z), 
+                         new THREE.Vector3(block.x, 0, block.z));
+    return;
+  }else if(block.z < 0){
+    this._updateNeighbor(new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y, this.wrapper.position.z + this.size.z), 
+                         new THREE.Vector3(block.x, block.y, this.size.z - 1));
+    return;
+  }else if(block.z >= this.size.z){
+    this._updateNeighbor(new THREE.Vector3(this.wrapper.position.x, this.wrapper.position.y, this.wrapper.position.z - this.size.z), 
+                         new THREE.Vector3(block.x, block.y, 0));
     return;
   }
 
   // Rebuild updated chunk
   this.buffer[block.x][block.y][block.z].setVisibility(true);
-  this._generateMesh();
+  this.generateMesh();
+}
+
+Chunk.prototype.getPosition = function(){
+  return this.wrapper.position.clone();
+}
+
+Chunk.prototype._updateNeighbor = function(position, block){
+  var chunk = Chunk.grid.get(position);
+
+  if(!chunk){
+    var generator = function(x, y, z){
+      return new Block(x == block.x && y == block.y && z == block.z);
+    }
+
+    new Chunk(this._scene, generator, this.size, position);
+  }else{
+    chunk.getBlock(block).setVisibility(true);
+    chunk.generateMesh();
+  }
 }
 
 Chunk.prototype.removeBlock = function(point, direction){
@@ -235,8 +306,24 @@ Chunk.prototype.removeBlock = function(point, direction){
   }
 
   // Delete chunk if needed
+  if(this.visibleChunks == 1){
+    Chunk.grid.set(this.getPosition(), null);
+    this._scene.remove(this.wrapper);
+    return;
+  }
 
   // Rebuild updated chunk
   this.buffer[block.x][block.y][block.z].setVisibility(false);
-  this._generateMesh();
+  this.generateMesh();
+}
+
+Chunk.prototype.getBlock = function(block, y, z){
+  if(y == undefined)
+    return this.buffer[block.x][block.y][block.z];
+  else
+    return this.buffer[block][y][z];
+}
+
+Chunk.prototype.getSize = function(){
+  return this.size;
 }

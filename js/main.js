@@ -6,22 +6,17 @@ function display(){
   renderer.setSize(window.innerWidth, window.innerHeight); 
   document.body.appendChild(renderer.domElement);
 
-  var light = new THREE.PointLight(0xBBBBBB, 1, 1000);
+  var light = new THREE.PointLight(0xFFFFFF, 1, 1000);
   var ambient = new THREE.AmbientLight(0x444444);
-  light.position.set(10.0, 0.0, 10.0);
+  light.position.set(0, 200.0, 100);
   scene.add(light);
   scene.add(ambient);
 
-  var chunk = new Chunk(scene, function(x, y, z){
-    var center = new THREE.Vector3(this.sizeX/2, this.sizeY/2, this.sizeZ/2);
-    var distance = center.sub(new THREE.Vector3(x + 0.5, y + 0.5, z - 0.5)).length();
-    return new Block(distance <= 4.8);
-  }, 10, 10, 10);
-
-  camera.position.z = 10; 
-  camera.position.y = 5;
-  camera.position.x = 10;
+  camera.position.z = 80; 
+  camera.position.y = 50;
   camera.lookAt(new THREE.Vector3(0, 0, 0))
+
+  var terrain = new Terrain(scene, new THREE.Vector3(10, 10, 2), new THREE.Vector3(10, 10, 10));
 
   var render = function () { 
     requestAnimationFrame(render); 
@@ -33,7 +28,7 @@ function display(){
   var raycaster = new THREE.Raycaster();
 
   $(document).mousedown(function(e){
-    x = 2*(e.clientX/window.innerWidth) - 1;
+    /*x = 2*(e.clientX/window.innerWidth) - 1;
     y = -2*(e.clientY/window.innerHeight) + 1;
 
     var vector = new THREE.Vector3(x, y, 1);
@@ -49,6 +44,6 @@ function display(){
         intersects[0].object.userData['chunk'].addBlock(intersects[0].point, direction);
       else if(e.which == 3)
         intersects[0].object.userData['chunk'].removeBlock(intersects[0].point, direction);
-    }
+    }*/
   })
 }
